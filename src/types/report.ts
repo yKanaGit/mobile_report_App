@@ -1,18 +1,19 @@
-export interface ExtractedField {
+export interface DetectedObject {
   label: string;
-  value: string;
+  score: number;
+  bbox?: number[];
 }
 
-export interface Report {
-  classification: string;
-  extractedFields: ExtractedField[];
-  translatedSummary: string;
-  relatedDocuments: string[];
+export interface AnalysisResponse {
+  sceneLabel: string;
+  objects: DetectedObject[];
+  llmReport: string;
 }
 
-export interface SubmitData {
-  report: Report;
+export interface SubmitPayload {
+  sceneLabel: string;
+  objects: DetectedObject[];
+  llmReport: string;
   memo: string;
-  imageUrl: string;
-  timestamp: string;
+  imageId?: string;
 }

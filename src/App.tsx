@@ -6,13 +6,13 @@ import { ReportSection } from './components/ReportSection';
 import { MemoSection } from './components/MemoSection';
 import { SubmitSection } from './components/SubmitSection';
 import { Toast } from './components/Toast';
-import { Report } from './types/report';
-import { callImageAnalysisApi, submitReport } from './utils/api';
+import { AnalysisResponse } from './types/report';
+import { analyzeImage, submitReportToBackend } from './utils/api';
 
 function App() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
+  const [report, setReport] = useState<AnalysisResponse | null>(null);
   const [memo, setMemo] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,8 +39,8 @@ function App() {
 
     setIsAnalyzing(true);
     try {
-      const analysisReport = await callImageAnalysisApi(selectedImage);
-      setReport(analysisReport);
+      const analysisResult = await analyzeImage(selectedImage);
+      setReport(analysisResult);
     } catch (error) {
       console.error('解析エラー:', error);
       setToastMessage('解析に失敗しました');
@@ -50,14 +50,19 @@ function App() {
   };
 
   const handleSubmit = async () => {
-    if (!report || !previewUrl) return;
+    if (!report) return;
 
     const confirmed = window.confirm('このレポートを送信しますか？');
     if (!confirmed) return;
 
     setIsSubmitting(true);
     try {
-      await submitReport(report, memo, previewUrl);
+      await submitReportToBackend({
+        sceneLabel: report.sceneLabel,
+        objects: report.objects,
+        llmReport: report.llmReport,
+        memo,
+      });
       setToastMessage('送信しました');
 
       setTimeout(() => {
