@@ -36,10 +36,19 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
     const result = await response.json();
     console.log("Model response:", result);
 
-    res.json(result);
+    // ここでフロント用にシンプルな JSON に詰め替える
+    const content =
+      result?.choices?.[0]?.message?.content ??
+      "(モデルから content が返ってきませんでした)";
+
+    res.json({
+      ok: true,
+      content,      // フロント側で使いやすいテキスト
+      raw: result,  // 元レスポンス（必要ならデバッグ用に保持）
+    });
   } catch (err) {
     console.error("ERROR:", err);
-    res.status(500).json({ error: "LLM request failed", detail: err.message });
+    res.status(500).json({ ok: false, error: "LLM request failed", detail: err.message });
   }
 });
 
