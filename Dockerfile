@@ -1,24 +1,20 @@
-# Multi-stage build to create optimized production image
-FROM node:18-alpine AS builder
+FROM node:18 AS build
 WORKDIR /app
 
-# Install dependencies based on locked versions
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
-# Copy source and build the app
 COPY . .
 RUN npm run build
 
-# Lightweight runtime stage to serve prebuilt assets
-FROM node:18-alpine AS runner
+FROM node:18
 WORKDIR /app
 
-# Install a minimal static file server
-RUN npm install -g serve
+COPY --from=build /app/dist ./dist
+COPY server ./server
 
-# Copy only the build output to keep the image small
-COPY --from=builder /app/dist ./dist
+WORKDIR /app/server
+RUN npm install
 
 EXPOSE 8080
-CMD ["serve", "-s", "dist", "-l", "8080"]
+CMD ["node", "server.js"]
