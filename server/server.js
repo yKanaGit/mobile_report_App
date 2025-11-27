@@ -22,33 +22,66 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
   console.log("*** analyze-image API called ***");
 
   try {
+    // 画像ファイル取得
+    const imageBuffer = req.file?.buffer;
+    if (!imageBuffer) {
+      return res.status(400).json({
+        ok: false,
+        error: "No image uploaded",
+      });
+    }
+
+    // base64 へ変換
+    const base64Image = imageBuffer.toString("base64");
+
+    // Qwen3-VL のマルチモーダル用ペイロード
+    const payload = {
+      model: "qwen3-vl-30b-a3b-thinking-fp8",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "この画像からレポートに必要な情報を抽出し、日本語で簡潔に要約してください。",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                // data URL 形式で画像を渡す
+                url: `data:image/jpeg;base64,${base64Image}`,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
     const response = await fetch(`${MODEL_URL}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "qwen3-vl-30b-a3b-thinking-fp8",
-        messages: [
-          { role: "user", content: "Extract information from the uploaded image." }
-        ]
-      }),
+      body: JSON.stringify(payload),
     });
 
     const result = await response.json();
     console.log("Model response:", result);
 
-    // ここでフロント用にシンプルな JSON に詰め替える
     const content =
       result?.choices?.[0]?.message?.content ??
       "(モデルから content が返ってきませんでした)";
 
     res.json({
       ok: true,
-      content,      // フロント側で使いやすいテキスト
-      raw: result,  // 元レスポンス（必要ならデバッグ用に保持）
+      content,
+      raw: result,
     });
   } catch (err) {
     console.error("ERROR:", err);
-    res.status(500).json({ ok: false, error: "LLM request failed", detail: err.message });
+    res.status(500).json({
+      ok: false,
+      error: "LLM request failed",
+      detail: err.message,
+    });
   }
 });
 
