@@ -5,16 +5,13 @@ const port = process.env.PORT ?? 8000;
 
 app.use(express.json());
 
-app.post('/api/analyze-image', async (_req, res) => {
-  try {
-    console.log('API received request');
+app.post('/api/analyze-image', async (req, res) => {
+  console.log('*** analyze-image handler called ***');
 
-    res.json({
-      ok: true,
-      message: 'API is working! (モデル連携はまだです)'
-    });
-  } catch (error) {
-    console.error(error);
+  try {
+    res.json({ ok: true, message: 'API is working!' });
+  } catch (err) {
+    console.error('*** analyze-image error ***', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
