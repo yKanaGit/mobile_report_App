@@ -5,7 +5,7 @@ const port = process.env.PORT ?? 8000;
 
 app.use(express.json());
 
-app.post('/api/analyze-image', async (req, res) => {
+app.post('/api/analyze-image', async (_req, res) => {
   console.log('*** analyze-image handler called ***');
 
   try {

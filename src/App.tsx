@@ -6,13 +6,13 @@ import { ReportSection } from './components/ReportSection';
 import { MemoSection } from './components/MemoSection';
 import { SubmitSection } from './components/SubmitSection';
 import { Toast } from './components/Toast';
-import { AnalysisResponse } from './types/report';
+import { AnalyzeImageSuccess } from './types/report';
 import { analyzeImage, submitReportToBackend } from './utils/api';
 
 function App() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [report, setReport] = useState<AnalysisResponse | null>(null);
+  const [report, setReport] = useState<AnalyzeImageSuccess | null>(null);
   const [memo, setMemo] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,12 +57,7 @@ function App() {
 
     setIsSubmitting(true);
     try {
-      await submitReportToBackend({
-        sceneLabel: report.sceneLabel,
-        objects: report.objects,
-        llmReport: report.llmReport,
-        memo,
-      });
+      await submitReportToBackend({ content: report.content, raw: report.raw, memo });
       setToastMessage('送信しました');
 
       setTimeout(() => {
