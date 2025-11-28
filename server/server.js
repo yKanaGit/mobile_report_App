@@ -39,6 +39,11 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
       model: "qwen3-vl-30b-a3b-thinking-fp8",
       messages: [
         {
+          role: "system",
+          content:
+            "あなたは日本語のみで回答するアシスタントです。出力は簡潔な日本語で行い、他の言語を混在させないでください。",
+        },
+        {
           role: "user",
           content: [
             {
