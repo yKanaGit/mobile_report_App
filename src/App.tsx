@@ -7,7 +7,7 @@ import { MemoSection } from './components/MemoSection';
 import { SubmitSection } from './components/SubmitSection';
 import { Toast } from './components/Toast';
 import { AnalyzeImageSuccess } from './types/report';
-import { analyzeImage, submitReportToBackend } from './utils/api';
+import { analyzeImage } from './utils/api';
 
 function App() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -49,28 +49,15 @@ function App() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!report) return;
 
-    const confirmed = window.confirm('このレポートを送信しますか？');
-    if (!confirmed) return;
-
     setIsSubmitting(true);
-    try {
-      await submitReportToBackend({ content: report.content, raw: report.raw, memo });
-      setToastMessage('送信しました');
-
-      setTimeout(() => {
-        handleImageRemove();
-        setMemo('');
-        setReport(null);
-      }, 1500);
-    } catch (error) {
-      console.error('送信エラー:', error);
-      setToastMessage('送信に失敗しました');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setToastMessage('送信しました');
+    handleImageRemove();
+    setMemo('');
+    setReport(null);
+    setIsSubmitting(false);
   };
 
   return (
