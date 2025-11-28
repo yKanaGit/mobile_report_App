@@ -1,4 +1,8 @@
-import { AnalysisResponse, SubmitPayload } from '../types/report';
+import {
+  AnalyzeImageSuccess,
+  AnalysisResponse,
+  SubmitPayload,
+} from '../types/report';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -18,7 +22,7 @@ async function ensureJsonResponse(response: Response) {
   return response.json();
 }
 
-export async function analyzeImage(imageFile: File): Promise<AnalysisResponse> {
+export async function analyzeImage(imageFile: File): Promise<AnalyzeImageSuccess> {
   const formData = new FormData();
   formData.append('image', imageFile);
 
@@ -31,7 +35,13 @@ export async function analyzeImage(imageFile: File): Promise<AnalysisResponse> {
     throw new Error(`API error: ${response.statusText}`);
   }
 
-  return ensureJsonResponse(response);
+  const parsed: AnalysisResponse = await ensureJsonResponse(response);
+
+  if (!parsed.ok) {
+    throw new Error(parsed.error || '解析に失敗しました');
+  }
+
+  return parsed;
 }
 
 export async function submitReportToBackend(payload: SubmitPayload): Promise<void> {

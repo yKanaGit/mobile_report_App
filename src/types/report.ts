@@ -1,19 +1,19 @@
-export interface DetectedObject {
-  label: string;
-  score: number;
-  bbox?: number[];
+export interface AnalyzeImageSuccess {
+  ok: true;
+  content: string;
+  raw: unknown;
 }
 
-export interface AnalysisResponse {
-  sceneLabel: string;
-  objects: DetectedObject[];
-  llmReport: string;
+export interface AnalyzeImageFailure {
+  ok: false;
+  error: string;
+  detail?: string;
 }
+
+export type AnalysisResponse = AnalyzeImageSuccess | AnalyzeImageFailure;
 
 export interface SubmitPayload {
-  sceneLabel: string;
-  objects: DetectedObject[];
-  llmReport: string;
+  content: string;
   memo: string;
-  imageId?: string;
+  raw?: unknown;
 }
