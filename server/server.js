@@ -38,12 +38,12 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
     const payload = {
       model: "qwen3-vl-30b-a3b-thinking-fp8",
      // temperature: 0.2,
-      max_tokens: 1024,
+     // max_tokens: 1024,
       messages: [
         {
           role: "system",
           content:
-            "必ず日本語のみで回答し、事実と考察を指定フォーマットで箇条書きにします。不明な点は必ず『不明』と書き、画像にない情報は含めません。",
+            "必ず日本語のみで回答し、事実を指定フォーマットで箇条書きにします。不明な点は必ず『不明』と書き、画像にない情報は含めません。",
         },
         {
           role: "user",
@@ -52,8 +52,7 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
               type: "text",
               text: [
                 "次の画像を分析し、以下の出力形式で回答してください。",
-                "1) 事実: 画像から直接確認できる内容（箇条書き・最大5項目）。英語/中国語があれば日本語訳も含める。",
-                "2) 考察: 事実を根拠に推測される内容（箇条書き・最大3項目）。",
+                "事実: 画像から直接確認できる内容（箇条書き）。英語/中国語があれば日本語訳も含める。",
                 "不明な点は『不明』と記載し、画像にない情報は書かないでください。",
               ].join("\n"),
             },
