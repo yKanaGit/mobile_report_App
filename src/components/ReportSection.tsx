@@ -21,7 +21,7 @@ export function ReportSection({ report }: ReportSectionProps) {
           <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{report.content}</p>
         </div>
 
-        <details className="bg-slate-50 border border-slate-200 rounded-lg p-4" open>
+        <details className="bg-slate-50 border border-slate-200 rounded-lg p-4">
           <summary className="flex items-center gap-2 cursor-pointer select-none">
             <ListTree className="w-4 h-4 text-gray-600" />
             <span className="text-sm font-semibold text-gray-700">モデルの詳細レスポンス</span>
