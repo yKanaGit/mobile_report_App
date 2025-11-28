@@ -38,7 +38,7 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
     const payload = {
       model: "qwen3-vl-30b-a3b-thinking-fp8",
      // temperature: 0.2,
-     // max_tokens: 512,
+      max_tokens: 1024,
       messages: [
         {
           role: "system",
