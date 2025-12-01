@@ -76,8 +76,31 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
     const result = await response.json();
     console.log("Model response:", result);
 
+    const message = result?.choices?.[0]?.message;
+
+    const normalizeContent = (value) => {
+      if (typeof value === "string") {
+        return value.trim();
+      }
+
+      if (Array.isArray(value)) {
+        return value
+          .map((part) => {
+            if (typeof part === "string") return part;
+            if (part?.text) return part.text;
+            return "";
+          })
+          .filter(Boolean)
+          .join("\n")
+          .trim();
+      }
+
+      return "";
+    };
+
     const content =
-      result?.choices?.[0]?.message?.content ??
+      normalizeContent(message?.content) ||
+      normalizeContent(message?.reasoning_content) ||
       "(モデルから content が返ってきませんでした)";
 
     res.json({
