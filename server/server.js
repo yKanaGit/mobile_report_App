@@ -36,7 +36,7 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
 
     // Qwen3-VL のマルチモーダル用ペイロード（日本語固定・出力形式指定・長文抑制）
     const payload = {
-      model: "qwen3-vl-30b-a3b-thinking-fp8",
+      model: MODEL_NAME,
      // temperature: 0.2,
      // max_tokens: 1024,
       messages: [
