@@ -53,7 +53,6 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
               text: [
                 "画像を解析して、レポートとして回答してください。",
                 "事件性・事故性の判断を行ってください。",
-                "英語/中国語があれば日本語訳も含めてください。",
               ].join("\n"),
             },
             {
