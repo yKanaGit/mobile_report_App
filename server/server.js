@@ -2,11 +2,13 @@ import express from "express";
 import multer from "multer";
 import fetch from "node-fetch";
 import path from "path";
+import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const REPORT_DIR = process.env.REPORT_DIR || "/data/reports";
 
 const app = express();
 const upload = multer();
@@ -122,7 +124,7 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
   }
 });
 
-app.post("/api/submit-report", (req, res) => {
+app.post("/api/submit-report", async (req, res) => {
   const { content, memo, raw } = req.body ?? {};
 
   if (typeof content !== "string" || content.trim() === "") {
@@ -161,16 +163,16 @@ app.post("/api/submit-report", (req, res) => {
     markdownParts.push(memoBlock);
   }
 
-    markdownParts.push(
-      "---",
-      "",
-      `# モバイルレポート (${caseCode})`,
-      "",
-      `このレポートの案件IDは **${caseCode}** です。`,
-      "",
-      "## モデル解析結果",
-      "",
-      content,
+  markdownParts.push(
+    "---",
+    "",
+    `# モバイルレポート (${caseCode})`,
+    "",
+    `このレポートの案件IDは **${caseCode}** です。`,
+    "",
+    "## モデル解析結果",
+    "",
+    content,
     "",
     "## 生データ (raw)",
     "",
@@ -183,10 +185,26 @@ app.post("/api/submit-report", (req, res) => {
 
   console.log(markdown);
 
+  const dirPath = path.join(REPORT_DIR, dateString);
+  const filePath = path.join(dirPath, `${uuid}.md`);
+
+  try {
+    await fs.mkdir(dirPath, { recursive: true });
+    await fs.writeFile(filePath, markdown, "utf-8");
+  } catch (err) {
+    console.error("Failed to save report:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to save report",
+      detail: err.message,
+    });
+  }
+
   res.json({
     ok: true,
     uuid,
     caseCode,
+    filePath,
   });
 });
 
