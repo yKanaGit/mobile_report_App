@@ -3,12 +3,15 @@ import multer from "multer";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
+import { randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const upload = multer();
+
+app.use(express.json());
 
 // OpenShift のモデルURL（後で Route URL を入れる）
 const MODEL_URL = process.env.MODEL_URL;
@@ -117,6 +120,23 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
       detail: err.message,
     });
   }
+});
+
+app.post("/api/submit-report", (req, res) => {
+  const { content } = req.body ?? {};
+
+  if (typeof content !== "string" || content.trim() === "") {
+    return res.status(400).json({ ok: false, error: "content is required" });
+  }
+
+  const uuid = randomUUID();
+  const caseCode = uuid.replace(/-/g, "").slice(0, 8).toUpperCase();
+
+  res.json({
+    ok: true,
+    uuid,
+    caseCode,
+  });
 });
 
 // === フロントアプリを提供 ===
