@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer";
-import fetch from "node-fetch";
+import fetch, { Blob, FormData } from "node-fetch";
 import path from "path";
 import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
@@ -17,9 +17,66 @@ app.use(express.json());
 
 // OpenShift のモデルURL（後で Route URL を入れる）
 const MODEL_URL = process.env.MODEL_URL;
+// NOTE: OPENWEBUI_URL / OPENWEBUI_API_KEY / OPENWEBUI_KB_ID の実際の値は、Open WebUI を OpenShift 上にデプロイしてから Deployment の env で設定します。
 
 if (!MODEL_URL) {
   console.log("WARNING: MODEL_URL is not set. Set it via environment variables.");
+}
+
+async function uploadMarkdownToOpenWebUI(filename, markdown) {
+  const OPENWEBUI_URL = process.env.OPENWEBUI_URL;
+  const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY;
+  const OPENWEBUI_KB_ID = process.env.OPENWEBUI_KB_ID;
+
+  if (!OPENWEBUI_URL || !OPENWEBUI_API_KEY || !OPENWEBUI_KB_ID) {
+    console.warn("OpenWebUI settings missing. Skipping KB upload.");
+    return null;
+  }
+
+  try {
+    const formData = new FormData();
+    const blob = new Blob([markdown], { type: "text/markdown" });
+    formData.append("file", blob, filename);
+
+    const uploadResponse = await fetch(`${OPENWEBUI_URL}/api/v1/files/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENWEBUI_API_KEY}`,
+      },
+      body: formData,
+    });
+
+    const uploadJson = await uploadResponse.json();
+    const fileId = uploadJson?.data?.file_id;
+
+    if (!fileId) {
+      throw new Error("Failed to obtain file_id from OpenWebUI upload response");
+    }
+
+    const kbResponse = await fetch(
+      `${OPENWEBUI_URL}/api/v1/knowledge/${OPENWEBUI_KB_ID}/file/add`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENWEBUI_API_KEY}`,
+        },
+        body: JSON.stringify({ file_id: fileId }),
+      }
+    );
+
+    if (!kbResponse.ok) {
+      const kbErrorText = await kbResponse.text();
+      throw new Error(
+        `Failed to add file to OpenWebUI knowledge base: ${kbResponse.status} ${kbErrorText}`
+      );
+    }
+
+    return fileId;
+  } catch (error) {
+    console.error("Failed to upload markdown to OpenWebUI:", error);
+    return null;
+  }
 }
 
 // === API ===
@@ -200,11 +257,15 @@ app.post("/api/submit-report", async (req, res) => {
     });
   }
 
+  const filename = `${dateString}-${caseCode}.md`;
+  const openwebuiFileId = await uploadMarkdownToOpenWebUI(filename, markdown);
+
   res.json({
     ok: true,
     uuid,
     caseCode,
     filePath,
+    openwebuiFileId,
   });
 });
 
