@@ -123,7 +123,7 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
 });
 
 app.post("/api/submit-report", (req, res) => {
-  const { content } = req.body ?? {};
+  const { content, memo, raw } = req.body ?? {};
 
   if (typeof content !== "string" || content.trim() === "") {
     return res.status(400).json({ ok: false, error: "content is required" });
@@ -131,6 +131,57 @@ app.post("/api/submit-report", (req, res) => {
 
   const uuid = randomUUID();
   const caseCode = uuid.replace(/-/g, "").slice(0, 8).toUpperCase();
+
+  const now = new Date();
+  const isoString = now.toISOString();
+  const dateString = isoString.split("T")[0];
+
+  const indentMemo = (text) =>
+    text
+      .split("\n")
+      .map((line) => `  ${line}`)
+      .join("\n");
+
+  const memoBlock =
+    typeof memo === "string" && memo.trim() !== ""
+      ? [`memo: |-`, indentMemo(memo)].join("\n")
+      : "";
+
+  const rawString = JSON.stringify(raw ?? {}, null, 2);
+
+  const markdownParts = [
+    "---",
+    `id: ${uuid}`,
+    `case_code: ${caseCode}`,
+    `created_at: ${isoString}`,
+    "source: mobile_report_app",
+  ];
+
+  if (memoBlock) {
+    markdownParts.push(memoBlock);
+  }
+
+  markdownParts.push(
+    "---",
+    "",
+    `# モバイルレポート (${caseCode})`,
+    "",
+    `このレポートの案件IDは **${caseCode}** です。`,
+    "",
+    "## モデル解析結果",
+    "",
+    content,
+    "",
+    "## 生データ (raw)",
+    "",
+    "```json",
+    rawString,
+    "```"
+  );
+
+  const markdown = markdownParts.join("\n");
+
+  console.log(markdown);
 
   res.json({
     ok: true,
