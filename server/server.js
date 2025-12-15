@@ -161,16 +161,16 @@ app.post("/api/submit-report", (req, res) => {
     markdownParts.push(memoBlock);
   }
 
-  markdownParts.push(
-    "---",
-    "",
-    `# モバイルレポート (${caseCode})`,
-    "",
-    `このレポートの案件IDは **${caseCode}** です。",
-    "",
-    "## モデル解析結果",
-    "",
-    content,
+    markdownParts.push(
+      "---",
+      "",
+      `# モバイルレポート (${caseCode})`,
+      "",
+      `このレポートの案件IDは **${caseCode}** です。`,
+      "",
+      "## モデル解析結果",
+      "",
+      content,
     "",
     "## 生データ (raw)",
     "",
