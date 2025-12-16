@@ -222,7 +222,7 @@ function App() {
             <div>
               <button
                 onClick={resetToInitialState}
-                className="px-4 py-2 bg-blue-600 text-white rounded shadow"
+                className="px-4 py-2 bg-gray-300 text-gray-900 rounded shadow"
               >
                 確認しました（最初の画面に戻る）
               </button>
