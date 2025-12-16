@@ -47,10 +47,26 @@ async function uploadMarkdownToOpenWebUI(filename, markdown) {
     });
 
     const uploadJson = await uploadResponse.json();
-    const fileId = uploadJson?.data?.file_id;
+    console.log(
+      "OpenWebUI /api/v1/files/ response:",
+      JSON.stringify(uploadJson, null, 2)
+    );
+
+    const fileId =
+      uploadJson.file_id ||
+      (uploadJson.data && uploadJson.data.file_id) ||
+      (uploadJson.data && uploadJson.data.id) ||
+      (uploadJson.file && uploadJson.file.id) ||
+      (Array.isArray(uploadJson.files) &&
+        uploadJson.files[0] &&
+        (uploadJson.files[0].file_id || uploadJson.files[0].id));
 
     if (!fileId) {
-      throw new Error("Failed to obtain file_id from OpenWebUI upload response");
+      console.error(
+        "Failed to obtain file_id from OpenWebUI upload response. uploadJson =",
+        uploadJson
+      );
+      return null;
     }
 
     const kbResponse = await fetch(
@@ -67,9 +83,10 @@ async function uploadMarkdownToOpenWebUI(filename, markdown) {
 
     if (!kbResponse.ok) {
       const kbErrorText = await kbResponse.text();
-      throw new Error(
+      console.error(
         `Failed to add file to OpenWebUI knowledge base: ${kbResponse.status} ${kbErrorText}`
       );
+      return null;
     }
 
     return fileId;
