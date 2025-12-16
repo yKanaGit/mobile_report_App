@@ -12,8 +12,16 @@ export interface AnalyzeImageFailure {
 
 export type AnalysisResponse = AnalyzeImageSuccess | AnalyzeImageFailure;
 
-export interface SubmitPayload {
+export interface SubmitReportPayload {
   content: string;
   memo: string;
   raw?: unknown;
+}
+
+export interface SubmitReportResponse {
+  ok: boolean;
+  uuid: string;
+  caseCode: string;
+  filePath?: string;
+  openwebuiFileId?: string | null;
 }

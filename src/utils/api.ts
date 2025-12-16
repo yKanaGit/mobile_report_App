@@ -1,7 +1,8 @@
 import {
   AnalyzeImageSuccess,
   AnalysisResponse,
-  SubmitPayload,
+  SubmitReportPayload,
+  SubmitReportResponse,
 } from '../types/report';
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
@@ -44,7 +45,9 @@ export async function analyzeImage(imageFile: File): Promise<AnalyzeImageSuccess
   return parsed;
 }
 
-export async function submitReportToBackend(payload: SubmitPayload): Promise<void> {
+export async function submitReportToBackend(
+  payload: SubmitReportPayload,
+): Promise<SubmitReportResponse> {
   const response = await fetch(buildUrl('/api/submit-report'), {
     method: 'POST',
     headers: {
@@ -54,6 +57,9 @@ export async function submitReportToBackend(payload: SubmitPayload): Promise<voi
   });
 
   if (!response.ok) {
-    throw new Error(`Submit error: ${response.statusText}`);
+    throw new Error(`Submit error: ${response.status}`);
   }
+
+  const parsed: SubmitReportResponse = await ensureJsonResponse(response);
+  return parsed;
 }
