@@ -123,7 +123,7 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
         {
           role: "system",
           content:
-            "必ず日本語のみで回答し、事実を指定フォーマットで箇条書きにします。",
+            "あなたは事件事故現場の捜査官です。必ず日本語のみで回答し、事実を指定フォーマットで箇条書きにします。",
         },
         {
           role: "user",
@@ -132,7 +132,6 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
               type: "text",
               text: [
                 "画像を解析して、レポートとして回答してください。",
-                "事件性・事故性の判断を行ってください。",
                 "画像内に日本語以外の文章がある場合、原文と日本語訳をレポートの下部にまとめてください。",
               ].join("\n"),
             },
