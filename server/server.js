@@ -54,6 +54,7 @@ async function uploadMarkdownToOpenWebUI(filename, markdown) {
 
     const fileId =
       uploadJson.file_id ||
+      uploadJson.id ||
       (uploadJson.data && uploadJson.data.file_id) ||
       (uploadJson.data && uploadJson.data.id) ||
       (uploadJson.file && uploadJson.file.id) ||
