@@ -146,7 +146,7 @@ function App() {
               </p>
             )}
             <p className="text-sm text-gray-800 font-medium">
-              Open WebUI で検索する際は、案件ID (caseCode) を使って検索してください。
+              本部システムで検索する際は、案件ID (caseCode) を使って検索してください。
             </p>
           </section>
         )}
