@@ -4,7 +4,7 @@ import fetch, { Blob, FormData } from "node-fetch";
 import path from "path";
 import { promises as fs } from "fs";
 import { fileURLToPath } from "url";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +23,46 @@ if (!MODEL_URL) {
   console.log("WARNING: MODEL_URL is not set. Set it via environment variables.");
 }
 
-async function uploadMarkdownToOpenWebUI(filename, markdown) {
+const FRONT_MATTER_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+
+const stripFrontMatter = (markdown) => markdown.replace(FRONT_MATTER_REGEX, "");
+
+const buildSendMarkdown = ({ markdown, stripFrontMatterEnabled }) => {
+  const normalizedMarkdown = stripFrontMatterEnabled
+    ? stripFrontMatter(markdown)
+    : markdown;
+  const body = normalizedMarkdown.replace(/^\s+/, "");
+  return `本文:\n\n${body}`;
+};
+
+const logSendMarkdownMeta = ({
+  traceId,
+  markdown,
+  frontMatterRemoved,
+  debugMinimal,
+}) => {
+  const mdSendSizeBytes = Buffer.byteLength(markdown, "utf8");
+  const mdSendSha256 = createHash("sha256").update(markdown).digest("hex");
+  const mdSendHead = markdown.slice(0, 200);
+
+  console.log(
+    "OpenWebUI send markdown meta:",
+    JSON.stringify(
+      {
+        trace_id: traceId,
+        md_send_size_bytes: mdSendSizeBytes,
+        md_send_sha256: mdSendSha256,
+        md_send_head: mdSendHead,
+        front_matter_removed: frontMatterRemoved,
+        debug_minimal: debugMinimal,
+      },
+      null,
+      2
+    )
+  );
+};
+
+async function uploadMarkdownToOpenWebUI(filename, markdown, options = {}) {
   const OPENWEBUI_URL = process.env.OPENWEBUI_URL;
   const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY;
   const OPENWEBUI_KB_ID = process.env.OPENWEBUI_KB_ID;
@@ -34,8 +73,27 @@ async function uploadMarkdownToOpenWebUI(filename, markdown) {
   }
 
   try {
+    const {
+      traceId,
+      debugMinimal = false,
+      stripFrontMatterEnabled = true,
+    } = options;
+    const markdownToSend = debugMinimal
+      ? "# test\nhello world"
+      : buildSendMarkdown({
+          markdown,
+          stripFrontMatterEnabled,
+        });
+
+    logSendMarkdownMeta({
+      traceId,
+      markdown: markdownToSend,
+      frontMatterRemoved: stripFrontMatterEnabled && !debugMinimal,
+      debugMinimal,
+    });
+
     const formData = new FormData();
-    const blob = new Blob([markdown], { type: "text/markdown" });
+    const blob = new Blob([markdownToSend], { type: "text/markdown" });
     formData.append("file", blob, filename);
 
     const uploadResponse = await fetch(`${OPENWEBUI_URL}/api/v1/files/`, {
@@ -199,7 +257,8 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
 });
 
 app.post("/api/submit-report", async (req, res) => {
-  const { content, memo, raw } = req.body ?? {};
+  const { content, memo, raw, openwebui_debug_minimal: openWebUiDebugMinimal } =
+    req.body ?? {};
   const normalizedContent =
     typeof content === "string" ? content.replace(/\s+/g, "").trim() : "";
   const emptyContentMessages = [
@@ -269,8 +328,6 @@ app.post("/api/submit-report", async (req, res) => {
 
   const markdown = markdownParts.join("\n");
 
-  console.log(markdown);
-
   const dirPath = path.join(REPORT_DIR, dateString);
   const filePath = path.join(dirPath, `${uuid}.md`);
 
@@ -287,7 +344,11 @@ app.post("/api/submit-report", async (req, res) => {
   }
 
   const filename = `${dateString}-${caseCode}.md`;
-  const openwebuiFileId = await uploadMarkdownToOpenWebUI(filename, markdown);
+  const openwebuiFileId = await uploadMarkdownToOpenWebUI(filename, markdown, {
+    traceId: uuid,
+    debugMinimal: Boolean(openWebUiDebugMinimal),
+    stripFrontMatterEnabled: true,
+  });
 
   res.json({
     ok: true,
@@ -295,6 +356,7 @@ app.post("/api/submit-report", async (req, res) => {
     caseCode,
     filePath,
     openwebuiFileId,
+    openwebuiDebugMinimal: Boolean(openWebUiDebugMinimal),
   });
 });
 
