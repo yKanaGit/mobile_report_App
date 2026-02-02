@@ -24,6 +24,9 @@ if (!MODEL_URL) {
 }
 
 const FRONT_MATTER_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+const KB_ADD_INFLIGHT = new Map();
+const KB_ADD_RETRYABLE_PATTERN = /EMPTY_CONTENT|The content provided is empty/i;
+const KB_ADD_RETRY_BASE_DELAYS_MS = [300, 1200];
 
 const stripFrontMatter = (markdown) => markdown.replace(FRONT_MATTER_REGEX, "");
 
@@ -62,6 +65,120 @@ const logSendMarkdownMeta = ({
   );
 };
 
+const jitterDelayMs = (baseMs) =>
+  Math.round(baseMs * (0.7 + Math.random() * 0.6));
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const logKbAddAttempt = ({
+  traceId,
+  kbId,
+  fileId,
+  attempt,
+  status,
+  responsePreview,
+  nextWaitMs,
+}) => {
+  const payload = {
+    trace_id: traceId,
+    kb_id: kbId,
+    file_id: fileId,
+    attempt,
+    status_code: status,
+    response_preview: responsePreview,
+  };
+
+  if (typeof nextWaitMs === "number") {
+    payload.next_wait_ms = nextWaitMs;
+  }
+
+  console.log("OpenWebUI kb add attempt:", JSON.stringify(payload, null, 2));
+};
+
+async function addFileToKbWithRetry({
+  openWebUiUrl,
+  kbId,
+  fileId,
+  token,
+  traceId,
+}) {
+  const lockKey = `${kbId}:${fileId}`;
+  const existingPromise = KB_ADD_INFLIGHT.get(lockKey);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const promise = (async () => {
+    for (let attempt = 0; attempt <= 2; attempt += 1) {
+      const response = await fetch(
+        `${openWebUiUrl}/api/v1/knowledge/${kbId}/file/add`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ file_id: fileId }),
+        }
+      );
+
+      const responseText = await response.text();
+      const responsePreview = responseText.slice(0, 200);
+      const isRetryable =
+        response.status === 400 &&
+        KB_ADD_RETRYABLE_PATTERN.test(responseText);
+
+      if (response.ok) {
+        logKbAddAttempt({
+          traceId,
+          kbId,
+          fileId,
+          attempt,
+          status: response.status,
+          responsePreview,
+        });
+        return true;
+      }
+
+      const nextDelayBase =
+        attempt < 2 && isRetryable
+          ? KB_ADD_RETRY_BASE_DELAYS_MS[attempt]
+          : undefined;
+      const nextWaitMs =
+        typeof nextDelayBase === "number"
+          ? jitterDelayMs(nextDelayBase)
+          : undefined;
+
+      logKbAddAttempt({
+        traceId,
+        kbId,
+        fileId,
+        attempt,
+        status: response.status,
+        responsePreview,
+        nextWaitMs,
+      });
+
+      if (!isRetryable || attempt >= 2) {
+        throw new Error(
+          `Failed to add file to OpenWebUI knowledge base: ${response.status} ${responsePreview}`
+        );
+      }
+
+      await sleep(nextWaitMs);
+    }
+
+    return false;
+  })();
+
+  KB_ADD_INFLIGHT.set(lockKey, promise);
+  try {
+    return await promise;
+  } finally {
+    KB_ADD_INFLIGHT.delete(lockKey);
+  }
+}
+
 async function uploadMarkdownToOpenWebUI(filename, markdown, options = {}) {
   const OPENWEBUI_URL = process.env.OPENWEBUI_URL;
   const OPENWEBUI_API_KEY = process.env.OPENWEBUI_API_KEY;
@@ -74,10 +191,11 @@ async function uploadMarkdownToOpenWebUI(filename, markdown, options = {}) {
 
   try {
     const {
-      traceId,
+      traceId: providedTraceId,
       debugMinimal = false,
       stripFrontMatterEnabled = true,
     } = options;
+    const traceId = providedTraceId || randomUUID();
     const markdownToSend = debugMinimal
       ? "# test\nhello world"
       : buildSendMarkdown({
@@ -128,23 +246,15 @@ async function uploadMarkdownToOpenWebUI(filename, markdown, options = {}) {
       return null;
     }
 
-    const kbResponse = await fetch(
-      `${OPENWEBUI_URL}/api/v1/knowledge/${OPENWEBUI_KB_ID}/file/add`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENWEBUI_API_KEY}`,
-        },
-        body: JSON.stringify({ file_id: fileId }),
-      }
-    );
+    const added = await addFileToKbWithRetry({
+      openWebUiUrl: OPENWEBUI_URL,
+      kbId: OPENWEBUI_KB_ID,
+      fileId,
+      token: OPENWEBUI_API_KEY,
+      traceId,
+    });
 
-    if (!kbResponse.ok) {
-      const kbErrorText = await kbResponse.text();
-      console.error(
-        `Failed to add file to OpenWebUI knowledge base: ${kbResponse.status} ${kbErrorText}`
-      );
+    if (!added) {
       return null;
     }
 
