@@ -183,6 +183,16 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
       normalizeContent(message?.reasoning_content) ||
       "(モデルから content が返ってきませんでした)";
 
+    if (
+      message &&
+      typeof message === "object" &&
+      (!normalizeContent(message.content) ||
+        normalizeContent(message.content).length === 0) &&
+      normalizeContent(message.reasoning_content)
+    ) {
+      message.content = content;
+    }
+
     res.json({
       ok: true,
       content,
