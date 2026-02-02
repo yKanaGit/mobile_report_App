@@ -28,6 +28,8 @@ const RAW_SECTION_REGEX = /\r?\n## 生データ \(raw\)[\s\S]*$/;
 const KB_ADD_INFLIGHT = new Map();
 const KB_ADD_RETRYABLE_PATTERN = /EMPTY_CONTENT|The content provided is empty/i;
 const KB_ADD_RETRY_BASE_DELAYS_MS = [300, 1200];
+const DEFAULT_FILE_PROCESS_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_FILE_PROCESS_INTERVAL_MS = 1500;
 
 const stripFrontMatter = (markdown) => markdown.replace(FRONT_MATTER_REGEX, "");
 const stripRawSection = (markdown) => markdown.replace(RAW_SECTION_REGEX, "");
@@ -73,6 +75,11 @@ const jitterDelayMs = (baseMs) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const getPositiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 const logKbAddAttempt = ({
   traceId,
   kbId,
@@ -97,6 +104,160 @@ const logKbAddAttempt = ({
 
   console.log("OpenWebUI kb add attempt:", JSON.stringify(payload, null, 2));
 };
+
+const logFileProcessStatus = (payload) => {
+  console.log("OpenWebUI file process status:", JSON.stringify(payload, null, 2));
+};
+
+async function waitForFileProcessed({
+  openWebUiUrl,
+  fileId,
+  token,
+  traceId,
+  timeoutMs = getPositiveNumber(
+    process.env.OPENWEBUI_FILE_PROCESS_TIMEOUT_MS,
+    DEFAULT_FILE_PROCESS_TIMEOUT_MS
+  ),
+  intervalMs = getPositiveNumber(
+    process.env.OPENWEBUI_FILE_PROCESS_INTERVAL_MS,
+    DEFAULT_FILE_PROCESS_INTERVAL_MS
+  ),
+}) {
+  const startTime = Date.now();
+  let attempt = 0;
+  const endpoint = `/api/v1/files/${fileId}/process/status`;
+  const openwebuiHost = new URL(openWebUiUrl).host;
+
+  while (Date.now() - startTime < timeoutMs) {
+    attempt += 1;
+    const shouldLogHttpError = attempt % 10 === 0;
+    let response;
+    try {
+      response = await fetch(`${openWebUiUrl}${endpoint}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      if (shouldLogHttpError) {
+        logFileProcessStatus({
+          trace_id: traceId,
+          file_id: fileId,
+          endpoint,
+          openwebui_host: openwebuiHost,
+          attempt,
+          status: "http_error",
+          message: error?.message,
+        });
+      }
+      await sleep(jitterDelayMs(intervalMs));
+      continue;
+    }
+
+    const responseText = await response.text();
+    const responsePreview = responseText.slice(0, 200);
+    let responseJson;
+    try {
+      responseJson = responseText ? JSON.parse(responseText) : null;
+    } catch (error) {
+      responseJson = null;
+    }
+
+    if (!response.ok) {
+      if (response.status >= 500) {
+        if (shouldLogHttpError) {
+          logFileProcessStatus({
+            trace_id: traceId,
+            file_id: fileId,
+            endpoint,
+            openwebui_host: openwebuiHost,
+            attempt,
+            status: "http_error",
+            status_code: response.status,
+            response_preview: responsePreview,
+          });
+        }
+        await sleep(jitterDelayMs(intervalMs));
+        continue;
+      }
+
+      logFileProcessStatus({
+        trace_id: traceId,
+        file_id: fileId,
+        endpoint,
+        openwebui_host: openwebuiHost,
+        attempt,
+        status: "http_error",
+        status_code: response.status,
+        response_preview: responsePreview,
+      });
+      throw new Error(
+        `OpenWebUI file status check failed: ${response.status} ${responsePreview}`
+      );
+    }
+
+    const status =
+      responseJson?.status ||
+      responseJson?.data?.status ||
+      responseJson?.file?.status;
+
+    if (status === "completed") {
+      logFileProcessStatus({
+        trace_id: traceId,
+        file_id: fileId,
+        endpoint,
+        openwebui_host: openwebuiHost,
+        attempt,
+        status: "completed",
+      });
+      return true;
+    }
+
+    if (status === "failed") {
+      logFileProcessStatus({
+        trace_id: traceId,
+        file_id: fileId,
+        endpoint,
+        openwebui_host: openwebuiHost,
+        attempt,
+        status: "failed",
+        error: responseJson?.error,
+        message: responseJson?.message,
+        response_preview: responsePreview,
+      });
+      throw new Error(
+        `OpenWebUI file processing failed: ${responseJson?.error || ""} ${
+          responseJson?.message || responsePreview
+        }`
+      );
+    }
+
+    if (!status) {
+      logFileProcessStatus({
+        trace_id: traceId,
+        file_id: fileId,
+        endpoint,
+        openwebui_host: openwebuiHost,
+        attempt,
+        status: "unknown",
+        response_preview: responsePreview,
+      });
+    }
+
+    await sleep(jitterDelayMs(intervalMs));
+  }
+
+  logFileProcessStatus({
+    trace_id: traceId,
+    file_id: fileId,
+    endpoint,
+    openwebui_host: openwebuiHost,
+    status: "timeout",
+    timeout_ms: timeoutMs,
+  });
+  return false;
+}
 
 async function addFileToKbWithRetry({
   openWebUiUrl,
@@ -225,18 +386,48 @@ async function uploadMarkdownToOpenWebUI(filename, markdown, options = {}) {
       body: formData,
     });
 
-    const uploadJson = await uploadResponse.json();
+    const uploadText = await uploadResponse.text();
+    let uploadJson;
+    try {
+      uploadJson = uploadText ? JSON.parse(uploadText) : null;
+    } catch (error) {
+      uploadJson = null;
+    }
+
+    if (!uploadResponse.ok) {
+      console.error(
+        "OpenWebUI upload failed:",
+        JSON.stringify(
+          {
+            trace_id: traceId,
+            status_code: uploadResponse.status,
+            response_preview: uploadText.slice(0, 300),
+          },
+          null,
+          2
+        )
+      );
+      return null;
+    }
+
     console.log(
       "OpenWebUI /api/v1/files/ response:",
-      JSON.stringify(uploadJson, null, 2)
+      JSON.stringify(
+        {
+          trace_id: traceId,
+          body: uploadJson,
+        },
+        null,
+        2
+      )
     );
 
     const fileId =
-      uploadJson.file_id ||
-      uploadJson.id ||
-      (uploadJson.data && uploadJson.data.file_id) ||
-      (uploadJson.data && uploadJson.data.id) ||
-      (uploadJson.file && uploadJson.file.id) ||
+      uploadJson?.file_id ||
+      uploadJson?.id ||
+      (uploadJson?.data && uploadJson.data.file_id) ||
+      (uploadJson?.data && uploadJson.data.id) ||
+      (uploadJson?.file && uploadJson.file.id) ||
       (Array.isArray(uploadJson.files) &&
         uploadJson.files[0] &&
         (uploadJson.files[0].file_id || uploadJson.files[0].id));
@@ -246,6 +437,17 @@ async function uploadMarkdownToOpenWebUI(filename, markdown, options = {}) {
         "Failed to obtain file_id from OpenWebUI upload response. uploadJson =",
         uploadJson
       );
+      return null;
+    }
+
+    const processed = await waitForFileProcessed({
+      openWebUiUrl: OPENWEBUI_URL,
+      fileId,
+      token: OPENWEBUI_API_KEY,
+      traceId,
+    });
+
+    if (!processed) {
       return null;
     }
 
