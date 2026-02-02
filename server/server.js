@@ -200,9 +200,21 @@ app.post("/api/analyze-image", upload.single("image"), async (req, res) => {
 
 app.post("/api/submit-report", async (req, res) => {
   const { content, memo, raw } = req.body ?? {};
+  const normalizedContent =
+    typeof content === "string" ? content.replace(/\s+/g, "").trim() : "";
+  const emptyContentMessages = [
+    "(モデルから content が返ってきませんでした)",
+  ];
+  const isContentEmpty =
+    typeof content !== "string" ||
+    content.trim() === "" ||
+    normalizedContent.length === 0 ||
+    emptyContentMessages.includes(content.trim());
 
-  if (typeof content !== "string" || content.trim() === "") {
-    return res.status(400).json({ ok: false, error: "content is required" });
+  if (isContentEmpty) {
+    return res
+      .status(400)
+      .json({ ok: false, error: "content is empty or invalid" });
   }
 
   const uuid = randomUUID();
