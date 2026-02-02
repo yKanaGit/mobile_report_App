@@ -457,7 +457,7 @@ app.post("/api/submit-report", async (req, res) => {
   const openwebuiFileId = await uploadMarkdownToOpenWebUI(filename, markdown, {
     traceId: uuid,
     debugMinimal: Boolean(openWebUiDebugMinimal),
-    stripFrontMatterEnabled: true,
+    stripFrontMatterEnabled: false,
   });
 
   res.json({
