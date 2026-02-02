@@ -24,17 +24,20 @@ if (!MODEL_URL) {
 }
 
 const FRONT_MATTER_REGEX = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
+const RAW_SECTION_REGEX = /\r?\n## 生データ \(raw\)[\s\S]*$/;
 const KB_ADD_INFLIGHT = new Map();
 const KB_ADD_RETRYABLE_PATTERN = /EMPTY_CONTENT|The content provided is empty/i;
 const KB_ADD_RETRY_BASE_DELAYS_MS = [300, 1200];
 
 const stripFrontMatter = (markdown) => markdown.replace(FRONT_MATTER_REGEX, "");
+const stripRawSection = (markdown) => markdown.replace(RAW_SECTION_REGEX, "");
 
 const buildSendMarkdown = ({ markdown, stripFrontMatterEnabled }) => {
   const normalizedMarkdown = stripFrontMatterEnabled
     ? stripFrontMatter(markdown)
     : markdown;
-  const body = normalizedMarkdown.replace(/^\s+/, "");
+  const sanitizedMarkdown = stripRawSection(normalizedMarkdown);
+  const body = sanitizedMarkdown.replace(/^\s+/, "");
   return `本文:\n\n${body}`;
 };
 
